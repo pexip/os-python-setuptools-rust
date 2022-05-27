@@ -1,0 +1,29 @@
+Rules-Requires-Root: no
+Standards-Version: 4.6.0
+Build-Depends:
+ debhelper-compat (= 13),
+ dh-sequence-python3,
+ python3-all,
+ python3-semantic-version,
+ python3-setuptools (>= 46.1),
+ python3-setuptools-scm (>= 3.4.3),
+ python3-typing-extensions (>= 3.7.4.3)
+Testsuite: autopkgtest-pkg-python
+Source: python-setuptools-rust
+Homepage: https://github.com/PyO3/setuptools-rust
+Priority: optional
+Section: python
+Uploaders: Jelmer Vernooĳ <jelmer@debian.org>
+Maintainer: Debian Python Team <team+python@tracker.debian.org>
+Vcs-Git: https://salsa.debian.org/python-team/packages/python-setuptools-rust.git
+Vcs-Browser: https://salsa.debian.org/python-team/packages/python-setuptools-rust
+
+Package: python3-setuptools-rust
+Depends: python3-setuptools, ${misc:Depends}, ${python3:Depends}, rustc, cargo
+Architecture: all
+Description: Setuptools Rust extension plugin
+ setuptools-rust is a plugin for setuptools to build Rust Python
+ extensions implemented with PyO3 or rust-cpython.
+ .
+ Compile and distribute Python extensions written in Rust as easily as
+ if they were written in C.

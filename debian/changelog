@@ -1,0 +1,39 @@
+python-setuptools-rust (1.2.0-3) unstable; urgency=medium
+
+  * Remove constraints unnecessary since buster:
+    + Build-Depends: Drop versioned constraint on python3-semantic-version.
+
+ -- Debian Janitor <janitor@jelmer.uk>  Sat, 28 May 2022 00:36:16 +0100
+
+python-setuptools-rust (1.2.0-2) unstable; urgency=medium
+
+  * Add dependency on rust compiler.
+  * Add autopkgtest for building the hello-world example.
+
+ -- Jelmer Vernooĳ <jelmer@debian.org>  Sat, 14 May 2022 17:10:52 +0100
+
+python-setuptools-rust (1.2.0-1) unstable; urgency=medium
+
+  * Team upload.
+  * New upstream release.
+  * Delete version.py on clean. Closes: #1002443
+  * Bump Standards-Version to 4.6.0, no changes needed.
+  * Drop Build-Depends on python3-tomli, no longer needed.
+
+ -- Stefano Rivera <stefanor@debian.org>  Thu, 31 Mar 2022 21:02:18 -0400
+
+python-setuptools-rust (1.1.1-1) unstable; urgency=medium
+
+  * Team upload.
+  * New upstream release.
+  * Build-Depend on python3-tomli and python3-typing-extensions instead of
+    python3-toml, following upstream.
+  * Rename Vcs repo to match source package.
+
+ -- Stefano Rivera <stefanor@debian.org>  Wed, 01 Dec 2021 15:43:37 -0400
+
+python-setuptools-rust (0.12.1-1) unstable; urgency=low
+
+  * Initial release. Closes: #978081
+
+ -- Jelmer Vernooĳ <jelmer@debian.org>  Sun, 04 Jul 2021 16:30:47 +0100

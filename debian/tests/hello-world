@@ -1,0 +1,16 @@
+#!/bin/bash -ex
+
+cd examples/hello-world/
+export CARGO_HOME=$(mktemp -d)
+
+cat>${CARGO_HOME}/config.toml<<EOF
+[source]
+
+[source.mirror]
+directory = "/usr/share/cargo/registry/"
+
+[source.crates-io]
+replace-with = "mirror"
+EOF
+
+python3 setup.py test
