@@ -1,3 +1,9 @@
+python-setuptools-rust (1.2.0-3pexip1) pexip; urgency=medium
+
+  * Prepare Pexip packaging
+
+ -- Mark Hymers <mark.hymers@pexip.com>  Mon, 25 Jul 2022 15:48:05 +0100
+
 python-setuptools-rust (1.2.0-3) unstable; urgency=medium
 
   * Remove constraints unnecessary since buster:

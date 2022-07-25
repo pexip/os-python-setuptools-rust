@@ -13,10 +13,12 @@ Source: python-setuptools-rust
 Homepage: https://github.com/PyO3/setuptools-rust
 Priority: optional
 Section: python
-Uploaders: Jelmer Vernooĳ <jelmer@debian.org>
-Maintainer: Debian Python Team <team+python@tracker.debian.org>
+XSBC-Pexip-Original-Uploaders: Jelmer Vernooĳ <jelmer@debian.org>
+Maintainer: Pexip AS <packaging@pexip.com>
+XSBC-Pexip-Original-Maintainer: Debian Python Team <team+python@tracker.debian.org>
 Vcs-Git: https://salsa.debian.org/python-team/packages/python-setuptools-rust.git
 Vcs-Browser: https://salsa.debian.org/python-team/packages/python-setuptools-rust
+XS-Pexip-Upstream: http://ftp.debian.org/debian/ bookworm
 
 Package: python3-setuptools-rust
 Depends: python3-setuptools, ${misc:Depends}, ${python3:Depends}, rustc, cargo
