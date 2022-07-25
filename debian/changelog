@@ -1,4 +1,4 @@
-python-setuptools-rust (1.2.0-3pexip1) pexip; urgency=medium
+python-setuptools-rust (1.2.0-3pexip1) pexip-bullseye; urgency=medium
 
   * Prepare Pexip packaging
 
