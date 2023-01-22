@@ -1,3 +1,18 @@
+python-setuptools-rust (1.5.2-2) unstable; urgency=medium
+
+  * Source-only upload.
+
+ -- Jelmer Vernooĳ <jelmer@debian.org>  Sun, 22 Jan 2023 14:19:29 +0000
+
+python-setuptools-rust (1.5.2-1) unstable; urgency=low
+
+  * New upstream release.
+   + Drop debian/clean again, since we're now shipping a tarball that includes
+     it.
+  * Drop outdated patch hello-world-profile.
+
+ -- Jelmer Vernooĳ <jelmer@debian.org>  Tue, 10 Jan 2023 23:41:50 +0000
+
 python-setuptools-rust (1.2.0-3) unstable; urgency=medium
 
   * Remove constraints unnecessary since buster:
