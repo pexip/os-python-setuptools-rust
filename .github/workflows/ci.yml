@@ -34,9 +34,9 @@ jobs:
         with:
           python-version: "3.x"
 
-      - run: pip install tox
+      - run: pip install nox
 
-      - run: tox -e mypy
+      - run: nox -s mypy
 
   pytest:
     runs-on: "ubuntu-latest"
@@ -48,9 +48,16 @@ jobs:
         with:
           python-version: "3.x"
 
-      - run: pip install tox
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          default: true
 
-      - run: tox -e pytest
+      - run: pip install nox
+
+      - run: nox -s test
 
   build:
     name:  ${{ matrix.python-version }} ${{ matrix.platform.os }}-${{ matrix.platform.python-architecture }}
@@ -127,13 +134,9 @@ jobs:
 
       - name: Test sdist vendor Rust crates
         shell: bash
-        run: |
-          cd examples/namespace_package
-          python setup.py sdist --vendor-crates
-          cd dist
-          tar -zxf namespace_package-0.1.0.tar.gz
-          cd namespace_package-0.1.0
-          cargo build --offline --target ${{ matrix.platform.rust-target }}
+        run: nox -s test-sdist-vendor
+        env:
+          CARGO_BUILD_TARGET: ${{ matrix.platform.rust-target }}
 
   test-abi3:
     runs-on: ${{ matrix.os }}
@@ -191,7 +194,7 @@ jobs:
           python -c "from rust_with_cffi import rust; assert rust.rust_func() == 14"
           python -c "from rust_with_cffi.cffi import lib; assert lib.cffi_func() == 15"
 
-  test-cross-compile:
+  test-crossenv:
     runs-on: ubuntu-latest
     strategy:
       # If one platform fails, allow the rest to keep testing if `CI-no-fail-fast` label is present
@@ -205,14 +208,19 @@ jobs:
       - uses: actions/checkout@master
       - name: Build wheels
         run: |
-          echo 'curl -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+          echo 'set -ex
+          curl -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
           source ~/.cargo/env
           rustup target add ${{ matrix.platform.target }}
+
+          # https://github.com/pypa/setuptools_scm/issues/707
+          git config --global --add safe.directory /io
+
           cd examples/rust_with_cffi/
           python3.9 -m pip install crossenv
           python3.9 -m crossenv "/opt/python/cp39-cp39/bin/python3" --cc $TARGET_CC --cxx $TARGET_CXX --sysroot $TARGET_SYSROOT --env LIBRARY_PATH= --manylinux manylinux1 venv
           . venv/bin/activate
-          build-pip install cffi wheel
+          build-pip install cffi wheel "setuptools>=62.4"
           cross-expose cffi
           pip install wheel
           pip install -e ../../
@@ -252,7 +260,9 @@ jobs:
           toolchain: stable
           override: true
       - name: Install cross
-        run: cargo install cross
+        uses: taiki-e/install-action@v1
+        with:
+          tool: cross
       - name: Build package
         run: pip install -e .
       - name: Build wheel using cross
@@ -299,8 +309,7 @@ jobs:
           override: true
       - name: Install cargo-zigbuild
         run: |
-          cargo install cargo-zigbuild
-          python3 -m pip install ziglang
+          python3 -m pip install cargo-zigbuild
       - name: Build package
         run: pip install -e .
       - name: Build wheel using cargo-zigbuild
@@ -350,3 +359,95 @@ jobs:
           CIBW_BUILD_VERBOSITY: 1
         with:
           package-dir: examples/namespace_package
+
+  test-mingw:
+    runs-on: windows-latest
+    name:  ${{ matrix.python-version }} mingw-${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: [
+          { msystem: MINGW64, arch: x86_64, path: mingw64, rust_target: x86_64-pc-windows-gnu },
+          { msystem: MINGW32, arch: i686, path: mingw32, rust_target: i686-pc-windows-gnu }
+        ]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install MSys2 and dependencies
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          msystem: ${{ matrix.msystem }}
+          install: >-
+            git
+            mingw-w64-${{ matrix.arch }}-python
+            mingw-w64-${{ matrix.arch }}-python-pip
+            mingw-w64-${{ matrix.arch }}-openssl
+            mingw-w64-${{ matrix.arch }}-toolchain
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable-${{ matrix.rust_target }}
+          default: true
+
+      - name: Install test dependencies
+        shell: msys2 {0}
+        run: python -m pip install --upgrade nox pip wheel
+
+      - name: Create libpython symlink
+        shell: msys2 {0}
+        run: ln -s /${{ matrix.path }}/lib/libpython3.10.dll.a /${{ matrix.path }}/lib/libpython310.dll.a
+
+      - name: Test examples
+        shell: msys2 {0}
+        run: |
+          PATH="$PATH:/c/Users/runneradmin/.cargo/bin" nox -s test-mingw
+
+  test-emscripten:
+    name: Test Emscripten
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 18
+      - run: |
+          PYODIDE_VERSION=0.21.0
+
+          cd emscripten
+          npm i pyodide@0.21.0 prettier
+          cd node_modules/pyodide/
+          node ../prettier/bin-prettier.js -w pyodide.asm.js
+          EMSCRIPTEN_VERSION=$(node -p "require('./repodata.json').info.platform.split('_').slice(1).join('.')")
+          PYTHON_VERSION=3.10.2
+
+          echo "PYODIDE_VERSION=$PYODIDE_VERSION" >> $GITHUB_ENV
+          echo "EMSCRIPTEN_VERSION=$EMSCRIPTEN_VERSION" >> $GITHUB_ENV
+          echo "PYTHON_VERSION=$PYTHON_VERSION" >> $GITHUB_ENV
+          echo "ORIG_PATH=$PATH" >> $GITHUB_ENV
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          components: rust-src
+          target: wasm32-unknown-emscripten
+          override: true
+      - uses: mymindstorm/setup-emsdk@v11
+        with:
+          version: ${{env.EMSCRIPTEN_VERSION}}
+          actions-cache-folder: emsdk-cache
+      - uses: actions/setup-python@v2
+        id: setup-python
+        with:
+          python-version: ${{env.PYTHON_VERSION}}
+      - run: pip install nox
+      - uses: actions/cache@v3
+        with:
+          path: |
+            tests/pyodide
+          key: ${{ hashFiles('tests/*.js') }} - ${{ hashFiles('noxfile.py') }} - ${{ steps.setup-python.outputs.python-path }}
+      - uses: Swatinem/rust-cache@v1
+      - name: Test
+        run: |
+          export PATH=$ORIG_PATH:$PATH
+          nox -s test-examples-emscripten

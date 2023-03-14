@@ -1,5 +1,57 @@
 # Changelog
 
+## 1.5.2 (2022-09-19)
+### Fixed
+- Fix regression in `dylib` build artifacts not being found since 1.5.0. [#290](https://github.com/PyO3/setuptools-rust/pull/290)
+- Fix regression in sdist missing examples and other supplementary files since 1.5.0. [#291](https://github.com/PyO3/setuptools-rust/pull/291)
+
+## 1.5.1 (2022-08-14)
+### Fixed
+- Fix regression in `get_lib_name` crashing since 1.5.0. [#280](https://github.com/PyO3/setuptools-rust/pull/280)
+- Fix regression in `Binding.Exec` builds with multiple executables not finding built executables since 1.5.0. [#283](https://github.com/PyO3/setuptools-rust/pull/283)
+
+## 1.5.0 (2022-08-09)
+### Added
+- Add support for extension modules built for wasm32-unknown-emscripten with Pyodide. [#244](https://github.com/PyO3/setuptools-rust/pull/244)
+
+### Changed
+- Locate cdylib artifacts by handling messages from cargo instead of searching target dir (fixes build on MSYS2). [#267](https://github.com/PyO3/setuptools-rust/pull/267)
+- No longer guess cross-compile environment using `HOST_GNU_TYPE` / `BUILD_GNU_TYPE` sysconfig variables. [#269](https://github.com/PyO3/setuptools-rust/pull/269)
+
+### Fixed
+- Fix RustBin build without wheel. [#273](https://github.com/PyO3/setuptools-rust/pull/273)
+- Fix RustBin setuptools install. [#275](https://github.com/PyO3/setuptools-rust/pull/275)
+
+## 1.4.1 (2022-07-05)
+### Fixed
+- Fix crash when checking Rust version. [#263](https://github.com/PyO3/setuptools-rust/pull/263)
+
+## 1.4.0 (2022-07-05)
+### Packaging
+- Increase minimum `setuptools` version to 62.4. [#246](https://github.com/PyO3/setuptools-rust/pull/246)
+
+### Added
+- Add `cargo_manifest_args` to support locked, frozen and offline builds. [#234](https://github.com/PyO3/setuptools-rust/pull/234)
+- Add `RustBin` for packaging binaries in scripts data directory. [#248](https://github.com/PyO3/setuptools-rust/pull/248)
+
+### Changed
+- `Exec` binding `RustExtension` with `script=True` is deprecated in favor of `RustBin`. [#248](https://github.com/PyO3/setuptools-rust/pull/248)
+- Errors while calling `cargo metadata` are now reported back to the user [#254](https://github.com/PyO3/setuptools-rust/pull/254)
+- `quiet` option will now suppress output of `cargo metadata`. [#256](https://github.com/PyO3/setuptools-rust/pull/256)
+- `setuptools-rust` will now match `cargo` behavior of not setting `--target` when the selected target is the rust host. [#258](https://github.com/PyO3/setuptools-rust/pull/258)
+- Deprecate `native` option of `RustExtension`. [#258](https://github.com/PyO3/setuptools-rust/pull/258)
+
+### Fixed
+- If the sysconfig for `BLDSHARED` has no flags, `setuptools-rust` won't crash anymore. [#241](https://github.com/PyO3/setuptools-rust/pull/241)
+
+## 1.3.0 (2022-04-26)
+### Packaging
+- Increase minimum `setuptools` version to 58. [#222](https://github.com/PyO3/setuptools-rust/pull/222)
+
+### Fixed
+- Fix crash when `python-distutils-extra` linux package is installed. [#222](https://github.com/PyO3/setuptools-rust/pull/222)
+- Fix sdist built with vendored dependencies on Windows having incorrect cargo config. [#223](https://github.com/PyO3/setuptools-rust/pull/223)
+
 ## 1.2.0 (2022-03-22)
 ### Packaging
 - Drop support for Python 3.6. [#209](https://github.com/PyO3/setuptools-rust/pull/209)

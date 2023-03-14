@@ -1,17 +1,19 @@
 import os
 import subprocess
-import sys
+import sysconfig
 from distutils import log
 from distutils.command.clean import clean
-from typing import List, Tuple, Type, cast
+from typing import List, Set, Tuple, Type, cast
 
 from setuptools.command.build_ext import build_ext
 from setuptools.command.install import install
+from setuptools.command.install_lib import install_lib
+from setuptools.command.install_scripts import install_scripts
 from setuptools.command.sdist import sdist
 from setuptools.dist import Distribution
 from typing_extensions import Literal
 
-from .extension import RustExtension
+from .extension import RustBin, RustExtension
 
 try:
     from wheel.bdist_wheel import bdist_wheel
@@ -37,6 +39,25 @@ def add_rust_extension(dist: Distribution) -> None:
     sdist_boolean_options.append("vendor-crates")
     sdist_negative_opt["no-vendor-crates"] = "vendor-crates"
 
+    # Patch dist to include console_scripts for Exec binding
+    console_scripts = []
+    for ext in dist.rust_extensions:  # type: ignore[attr-defined]
+        console_scripts.extend(ext.entry_points())
+
+    if console_scripts:
+        if not dist.entry_points:  # type: ignore[attr-defined]
+            dist.entry_points = {"console_scripts": console_scripts}  # type: ignore[attr-defined]
+        else:
+            ep_scripts = dist.entry_points.get("console_scripts")  # type: ignore[attr-defined]
+            if ep_scripts:
+                for script in console_scripts:
+                    if script not in ep_scripts:
+                        ep_scripts.append(console_scripts)
+            else:
+                ep_scripts = console_scripts
+
+            dist.entry_points["console_scripts"] = ep_scripts  # type: ignore[attr-defined]
+
     class sdist_rust_extension(sdist_base_class):  # type: ignore[misc,valid-type]
         user_options = sdist_options
         boolean_options = sdist_boolean_options
@@ -49,8 +70,18 @@ def add_rust_extension(dist: Distribution) -> None:
         def make_distribution(self) -> None:
             if self.vendor_crates:
                 manifest_paths = []
+
+                # Collate cargo manifest options together.
+                # We can cheat here, as the only valid options are the simple strings
+                # --frozen, --locked, or --offline.
+                #
+                # https://doc.rust-lang.org/cargo/commands/cargo-build.html#manifest-options
+                cargo_manifest_args: Set[str] = set()
                 for ext in self.distribution.rust_extensions:
                     manifest_paths.append(ext.path)
+                    if ext.cargo_manifest_args:
+                        cargo_manifest_args.update(ext.cargo_manifest_args)
+
                 if manifest_paths:
                     base_dir = self.distribution.get_fullname()
                     dot_cargo_path = os.path.join(base_dir, ".cargo")
@@ -58,6 +89,8 @@ def add_rust_extension(dist: Distribution) -> None:
                     cargo_config_path = os.path.join(dot_cargo_path, "config.toml")
                     vendor_path = os.path.join(dot_cargo_path, "vendor")
                     command = ["cargo", "vendor"]
+                    if cargo_manifest_args:
+                        command.extend(sorted(cargo_manifest_args))
                     # additional Cargo.toml for extension 1..n
                     for extra_path in manifest_paths[1:]:
                         command.append("--sync")
@@ -68,18 +101,9 @@ def add_rust_extension(dist: Distribution) -> None:
                     # set --manifest-path before vendor_path and after --sync to workaround that
                     # See https://docs.rs/clap/latest/clap/struct.Arg.html#method.multiple for detail
                     command.extend(["--manifest-path", manifest_paths[0], vendor_path])
-                    cargo_config = subprocess.check_output(command)
-                    base_dir_bytes = (
-                        base_dir.encode(sys.getfilesystemencoding()) + os.sep.encode()
-                    )
-                    if os.sep == "\\":
-                        # TOML escapes backslash \
-                        base_dir_bytes += os.sep.encode()
-                    cargo_config = cargo_config.replace(base_dir_bytes, b"")
-                    if os.altsep:
-                        cargo_config = cargo_config.replace(
-                            base_dir_bytes + os.altsep.encode(), b""
-                        )
+                    subprocess.run(command, check=True)
+
+                    cargo_config = _CARGO_VENDOR_CONFIG
 
                     # Check whether `.cargo/config`/`.cargo/config.toml` already exists
                     existing_cargo_config = None
@@ -90,18 +114,18 @@ def add_rust_extension(dist: Distribution) -> None:
                         if filename in self.filelist.files:
                             existing_cargo_config = filename
                             break
+
                     if existing_cargo_config:
                         cargo_config_path = os.path.join(
                             base_dir, existing_cargo_config
                         )
                         # Append vendor config to original cargo config
                         with open(existing_cargo_config, "rb") as f:
-                            cargo_config = f.read() + b"\n" + cargo_config
+                            cargo_config += f.read() + b"\n"
 
                     with open(cargo_config_path, "wb") as f:
                         f.write(cargo_config)
-                    self.filelist.append(vendor_path)
-                    self.filelist.append(cargo_config_path)
+
             super().make_distribution()
 
     dist.cmdclass["sdist"] = sdist_rust_extension
@@ -147,47 +171,66 @@ def add_rust_extension(dist: Distribution) -> None:
 
     install_base_class = cast(Type[install], dist.cmdclass.get("install", install))
 
-    # this is required because, install directly access distribution's
-    # ext_modules attr to check if dist has ext modules
+    # this is required to make install_scripts compatible with RustBin
     class install_rust_extension(install_base_class):  # type: ignore[misc,valid-type]
-        def finalize_options(self) -> None:
-            ext_modules = self.distribution.ext_modules
-
-            # all ext modules
-            mods = []
-            if self.distribution.ext_modules:
-                mods.extend(self.distribution.ext_modules)
+        def run(self) -> None:
+            install_base_class.run(self)
+            install_rustbin = False
             if self.distribution.rust_extensions:
-                mods.extend(self.distribution.rust_extensions)
-
-                scripts = []
-                for ext in self.distribution.rust_extensions:
-                    scripts.extend(ext.entry_points())
-
-                if scripts:
-                    if not self.distribution.entry_points:
-                        self.distribution.entry_points = {"console_scripts": scripts}
-                    else:
-                        ep_scripts = self.distribution.entry_points.get(
-                            "console_scripts"
-                        )
-                        if ep_scripts:
-                            for script in scripts:
-                                if script not in ep_scripts:
-                                    ep_scripts.append(scripts)
-                        else:
-                            ep_scripts = scripts
-
-                        self.distribution.entry_points["console_scripts"] = ep_scripts
-
-            self.distribution.ext_modules = mods
-
-            install_base_class.finalize_options(self)
-
-            # restore ext_modules
-            self.distribution.ext_modules = ext_modules
+                install_rustbin = any(
+                    isinstance(ext, RustBin)
+                    for ext in self.distribution.rust_extensions
+                )
+            if install_rustbin:
+                self.run_command("install_scripts")
 
     dist.cmdclass["install"] = install_rust_extension
+
+    install_lib_base_class = cast(
+        Type[install_lib], dist.cmdclass.get("install_lib", install_lib)
+    )
+
+    # prevent RustBin from being installed to data_dir
+    class install_lib_rust_extension(install_lib_base_class):  # type: ignore[misc,valid-type]
+        def get_exclusions(self) -> Set[str]:
+            exclusions: Set[str] = install_lib_base_class.get_exclusions(self)
+            build_rust = self.get_finalized_command("build_rust")
+            scripts_path = os.path.join(
+                self.install_dir, build_rust.data_dir, "scripts"
+            )
+            if self.distribution.rust_extensions:
+                exe = sysconfig.get_config_var("EXE")
+                for ext in self.distribution.rust_extensions:
+                    executable_name = ext.name
+                    if exe is not None:
+                        executable_name += exe
+                    if isinstance(ext, RustBin):
+                        exclusions.add(os.path.join(scripts_path, executable_name))
+            return exclusions
+
+    dist.cmdclass["install_lib"] = install_lib_rust_extension
+
+    install_scripts_base_class = cast(
+        Type[install_scripts], dist.cmdclass.get("install_scripts", install_scripts)
+    )
+
+    # this is required to make install_scripts compatible with RustBin
+    class install_scripts_rust_extension(install_scripts_base_class):  # type: ignore[misc,valid-type]
+        def run(self) -> None:
+            install_scripts_base_class.run(self)
+            build_ext = self.get_finalized_command("build_ext")
+            build_rust = self.get_finalized_command("build_rust")
+            scripts_path = os.path.join(
+                build_ext.build_lib, build_rust.data_dir, "scripts"
+            )
+            if os.path.isdir(scripts_path):
+                for file in os.listdir(scripts_path):
+                    script_path = os.path.join(scripts_path, file)
+                    if os.path.isfile(script_path):
+                        with open(os.path.join(script_path), "rb") as script_reader:
+                            self.write_script(file, script_reader.read(), mode="b")
+
+    dist.cmdclass["install_scripts"] = install_scripts_rust_extension
 
     if bdist_wheel is not None:
         bdist_wheel_base_class = cast(  # type: ignore[no-any-unimported]
@@ -203,29 +246,6 @@ def add_rust_extension(dist: Distribution) -> None:
             def initialize_options(self) -> None:
                 super().initialize_options()
                 self.target = os.getenv("CARGO_BUILD_TARGET")
-
-            def finalize_options(self) -> None:
-                scripts = []
-                for ext in self.distribution.rust_extensions:
-                    scripts.extend(ext.entry_points())
-
-                if scripts:
-                    if not self.distribution.entry_points:
-                        self.distribution.entry_points = {"console_scripts": scripts}
-                    else:
-                        ep_scripts = self.distribution.entry_points.get(
-                            "console_scripts"
-                        )
-                        if ep_scripts:
-                            for script in scripts:
-                                if script not in ep_scripts:
-                                    ep_scripts.append(scripts)
-                        else:
-                            ep_scripts = scripts
-
-                        self.distribution.entry_points["console_scripts"] = ep_scripts
-
-                bdist_wheel_base_class.finalize_options(self)
 
             def get_tag(self) -> Tuple[str, str, str]:
                 python, abi, plat = super().get_tag()
@@ -248,42 +268,26 @@ def add_rust_extension(dist: Distribution) -> None:
         dist.cmdclass["bdist_wheel"] = bdist_wheel_rust_extension
 
 
-def patch_distutils_build() -> None:
-    """Patch distutils to use `has_ext_modules()`
-
-    See https://github.com/pypa/distutils/pull/43
-    """
-    from distutils.command import build as _build
-
-    class build(_build.build):
-        # Missing type def from distutils.cmd.Command; add it here for now
-        distribution: Distribution
-
-        def finalize_options(self) -> None:
-            build_lib_user_specified = self.build_lib is not None
-            super().finalize_options()
-            if not build_lib_user_specified:
-                if self.distribution.has_ext_modules():  # type: ignore[attr-defined]
-                    self.build_lib = self.build_platlib
-                else:
-                    self.build_lib = self.build_purelib
-
-    _build.build = build  # type: ignore[misc]
-
-
 def rust_extensions(
     dist: Distribution, attr: Literal["rust_extensions"], value: List[RustExtension]
 ) -> None:
     assert attr == "rust_extensions"
     has_rust_extensions = len(value) > 0
 
-    # Monkey patch has_ext_modules to include Rust extensions; pairs with
-    # patch_distutils_build above.
+    # Monkey patch has_ext_modules to include Rust extensions.
     #
     # has_ext_modules is missing from Distribution typing.
     orig_has_ext_modules = dist.has_ext_modules  # type: ignore[attr-defined]
     dist.has_ext_modules = lambda: (orig_has_ext_modules() or has_rust_extensions)  # type: ignore[attr-defined]
 
     if has_rust_extensions:
-        patch_distutils_build()
         add_rust_extension(dist)
+
+
+_CARGO_VENDOR_CONFIG = b"""
+[source.crates-io]
+replace-with = "vendored-sources"
+
+[source.vendored-sources]
+directory = ".cargo/vendor"
+"""
