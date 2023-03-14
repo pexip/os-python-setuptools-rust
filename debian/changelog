@@ -1,3 +1,9 @@
+python-setuptools-rust (1.5.2-2pexip1) pexip; urgency=medium
+
+  * New upstream release
+
+ -- Huw Jones <huw@pexip.com>  Tue, 14 Mar 2023 15:51:48 +0000
+
 python-setuptools-rust (1.5.2-2) unstable; urgency=medium
 
   * Source-only upload.
