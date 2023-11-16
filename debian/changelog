@@ -1,3 +1,9 @@
+python-setuptools-rust (1.5.2-2pexip2) pexip-bookworm; urgency=medium
+
+  * Initial bookworm build
+
+ -- Mark Hymers <mark.hymers@pexip.com>  Thu, 16 Nov 2023 10:26:15 +0000
+
 python-setuptools-rust (1.5.2-2pexip1) pexip; urgency=medium
 
   * New upstream release
